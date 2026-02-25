@@ -1,5 +1,3 @@
-# core/solver3.py
-# 包含了一个针对 SSL（自监督）的特殊逻辑：如果 LAMBDA_MSE == 0（即无监督模式），它会强制模型学习“原图得分 > 增强图得分”。
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -73,7 +71,7 @@ class Solver:
             x_c_aug, x_d_aug = x_c_aug.to(self.device), x_d_aug.to(self.device)
 
             # --- Forward Pass ---
-            pred_score, pred_subs, proj_c, proj_d, feat_c, feat_d = self.model(x_c, x_d)
+            pred_score, pred_subs, feat_c, feat_d = self.model(x_c, x_d)
             pred_score = pred_score.view(-1)
             
             # --- Calculate Losses ---
@@ -87,11 +85,6 @@ class Solver:
             loss_rank = torch.tensor(0.0).to(self.device)
             if self.cfg.LAMBDA_RANK > 0:
                 loss_rank = self.rank_crit(pred_score, score)
-            
-            # 3. MI Loss (解耦)
-            loss_mi = torch.tensor(0.0).to(self.device)
-            if self.cfg.LAMBDA_MI > 0:
-                loss_mi = self.model.mi_estimator(feat_c, feat_d)
                 
             # 4. Sub-score Loss
             loss_sub = torch.tensor(0.0).to(self.device)
@@ -102,7 +95,7 @@ class Solver:
             loss_ssl = torch.tensor(0.0).to(self.device)
             if self.cfg.LAMBDA_SSL > 0:
                 # 增强图的前向
-                pred_score_aug, _, _, _, _, _ = self.model(x_c_aug, x_d_aug)
+                pred_score_aug, _, _, _ = self.model(x_c_aug, x_d_aug)
                 pred_score_aug = pred_score_aug.view(-1)
                 
                 # [核心逻辑] 无监督代理损失
@@ -116,7 +109,6 @@ class Solver:
             # --- Total Loss ---
             total_loss = (self.cfg.LAMBDA_MSE * loss_mse +
                           self.cfg.LAMBDA_RANK * loss_rank +
-                          self.cfg.LAMBDA_MI * loss_mi +
                           self.cfg.LAMBDA_SUB * loss_sub +
                           self.cfg.LAMBDA_SSL * loss_ssl)
 
@@ -143,7 +135,7 @@ class Solver:
                 x_c, x_d, score, _, key, _, _ = batch
                 x_c, x_d = x_c.to(self.device), x_d.to(self.device)
                 
-                pred_score, _, _, _, _, _ = self.model(x_c, x_d)
+                pred_score, _, _, _ = self.model(x_c, x_d)
                 
                 preds.extend(pred_score.cpu().numpy().flatten())
                 targets.extend(score.numpy().flatten())
