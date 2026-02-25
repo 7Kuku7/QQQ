@@ -91,7 +91,8 @@ def main():
         root_dir=cfg.ROOT_DIR,
         mos_file=cfg.MOS_FILE,
         mode='train',
-        basic_transform=basic_transform,
+        patch_transform=train_patch_selector, # [修改点]
+        tensor_transform=tensor_transform,    # [修改点]
         ssl_transform=ssl_augmentor,
         distortion_sampling=False,
         # distortion_sampling=True,
@@ -102,7 +103,8 @@ def main():
         root_dir=cfg.ROOT_DIR,
         mos_file=cfg.MOS_FILE,
         mode='val',
-        basic_transform=basic_transform,
+        patch_transform=val_patch_selector,   # [修改点]
+        tensor_transform=tensor_transform,    # [修改点]
         ssl_transform=None,
         distortion_sampling=False,
         use_subscores=cfg.USE_SUBSCORES
