@@ -14,6 +14,7 @@ from core.solver import Solver
 from datasets.nerf_loader import NerfDataset
 from datasets.ssl_transforms import SelfSupervisedAugmentor 
 from models.dis_nerf_advanced import DisNeRFQA_Advanced
+from datasets.patch_sampler import VarianceBiasedCrop
 
 class MultiScaleCrop:
     def __init__(self, size=224): self.size = size
