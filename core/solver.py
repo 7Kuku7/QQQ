@@ -54,7 +54,7 @@ class Solver:
         
         # 打印一下权重配置，方便 debug
         print(f"[Solver] Weights -> MSE: {self.cfg.LAMBDA_MSE}, Rank: {self.cfg.LAMBDA_RANK}, "
-              f"MI: {self.cfg.LAMBDA_MI}, SSL: {self.cfg.LAMBDA_SSL}")
+              f"SSL: {self.cfg.LAMBDA_SSL}")
 
     def train_epoch(self, epoch):
         self.model.train()
