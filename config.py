@@ -26,7 +26,6 @@ class Config:
     # 通过设置权重为 0.0 来实现消融实验 (Ablation)
     LAMBDA_MSE = 1.0      # 主分数回归损失
     LAMBDA_RANK = 0.2     # 排序损失
-    LAMBDA_MI = 0.0       # 解耦损失 (MI Loss) -> 设为0即为 w/o Decoupling
     LAMBDA_SUB = 0.05      # 子任务分数损失 -> 设为0即为 w/o Multi-task
     LAMBDA_SSL = 0.1      # 自监督一致性损失 -> 设为0即为 w/o SSL
 
