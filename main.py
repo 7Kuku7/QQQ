@@ -60,19 +60,31 @@ def main():
     print(f"Output Dir: {output_dir}")
     print("="*50)
 
-    # 2. Transforms
-    basic_transform = T.Compose([
-        MultiScaleCrop(224), 
+    # # 2. Transforms
+    # basic_transform = T.Compose([
+    #     MultiScaleCrop(224), 
+    #     T.ToTensor(), 
+    #     T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    # ])
+    
+    # ssl_augmentor = None
+    # if cfg.LAMBDA_SSL > 0:
+    #     print(" -> SSL Augmentation Module: ENABLED")
+    #     ssl_augmentor = SelfSupervisedAugmentor()
+    # else:
+    #     print(" -> SSL Augmentation Module: DISABLED (Ablation)")
+
+    # 2. Transforms (方差筛选 + 张量化)
+    # 【训练策略】一帧选1个最强失真块。因为 Epoch 多，相当于间接完成了一帧多裁，且防止显存爆炸
+    train_patch_selector = VarianceBiasedCrop(size=224, num_patches=1, candidate_pool_size=10, mode='train')
+    
+    # 【测试策略】一帧多裁。每帧固定提取方差最高的 3 个图块，合并评分。
+    val_patch_selector = VarianceBiasedCrop(size=224, num_patches=3, candidate_pool_size=10, mode='val')
+
+    tensor_transform = T.Compose([
         T.ToTensor(), 
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
-    
-    ssl_augmentor = None
-    if cfg.LAMBDA_SSL > 0:
-        print(" -> SSL Augmentation Module: ENABLED")
-        ssl_augmentor = SelfSupervisedAugmentor()
-    else:
-        print(" -> SSL Augmentation Module: DISABLED (Ablation)")
 
     # 3. Dataset
     train_set = NerfDataset(
