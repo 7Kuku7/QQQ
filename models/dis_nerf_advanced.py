@@ -1,12 +1,7 @@
-# 回归版本。
-# 它也有 MultiTaskLoss。
-# 关键区别：子分数头的输入改回了 融合特征 (feat_fused)（类似基础版）。这可能是发现融合特征效果更好后的回调。
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .backbone import get_content_encoder, get_distortion_encoder
-from .mi_estimator import MIEstimator
 
 class AdaptiveFeatureFusion(nn.Module):
     """
@@ -54,10 +49,7 @@ class DisNeRFQA_Advanced(nn.Module):
         
         # Feature dimensions
         self.feat_dim = 768 # ViT-Base and Swin-Tiny (projected)
-        
-        # 2. MI Estimator
-        self.mi_estimator = MIEstimator(self.feat_dim)
-        
+
         # 3. Adaptive Fusion (Innovation)
         if self.use_fusion:
             self.fusion = AdaptiveFeatureFusion(self.feat_dim)
@@ -75,35 +67,13 @@ class DisNeRFQA_Advanced(nn.Module):
             nn.Linear(128, 1),
             nn.Sigmoid() 
         )
-        
-        # Auxiliary Sub-score Regressor (Multi-task Innovation)
-        # Predicts: [Discomfort, Blur, Lighting, Artifacts] (normalized 0-1)
+
         self.num_subscores = num_subscores
-        # self.subscore_head = nn.Sequential(
-        #     nn.Linear(self.feat_dim, 256), # Uses distortion features
-        #     nn.ReLU(),
-        #     nn.Linear(256, num_subscores),
-        #     nn.Sigmoid() # Assuming subscores are also normalized to 0-1
-        # )
-        
         self.subscore_head = nn.Sequential(
-            # 输入改为 Fusion 后的维度 (768 * 2)
             nn.Linear(self.feat_dim * 2, 256), 
             nn.ReLU(),
             nn.Linear(256, num_subscores),
             nn.Sigmoid()
-        )
-        
-        # Contrastive Projectors
-        self.proj_c = nn.Sequential(
-            nn.Linear(self.feat_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128)
-        )
-        self.proj_d = nn.Sequential(
-            nn.Linear(self.feat_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128)
         )
 
     def forward(self, x_content, x_distortion):
@@ -163,11 +133,7 @@ class DisNeRFQA_Advanced(nn.Module):
         # sub_scores = self.subscore_head(feat_d)
         sub_scores = self.subscore_head(feat_fused)
         
-        # 3. Projections
-        proj_c = self.proj_c(feat_c)
-        proj_d = self.proj_d(feat_d)
-        
-        return score, sub_scores, proj_c, proj_d, feat_c, feat_d
+        return score, sub_scores, feat_c, feat_d
 
 class MultiTaskLoss(nn.Module):
     # 基于同方差不确定性(Homoscedastic Uncertainty)的自适应多任务Loss权重
@@ -189,3 +155,4 @@ class MultiTaskLoss(nn.Module):
             loss_sum += 0.5 * precision * loss + 0.5 * self.log_vars[i]
 
         return loss_sum
+
