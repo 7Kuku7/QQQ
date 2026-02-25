@@ -17,14 +17,16 @@ except ImportError:
 
 class NerfDataset(Dataset):
     def __init__(self, root_dir, mos_file, mode='train', 
-                 basic_transform=None, 
+                 patch_transform=None, # [修改点] 新增：负责方差筛选裁剪
+                 tensor_transform=None, # [修改点] 新增：负责转Tensor
                  ssl_transform=None,  
                  distortion_sampling=False, 
                  num_frames=8,
                  use_subscores=True):
         
         self.root_dir = Path(root_dir)
-        self.basic_transform = basic_transform
+        self.patch_transform = patch_transform   # [修改点]
+        self.tensor_transform = tensor_transform # [修改点]
         self.ssl_transform = ssl_transform 
         self.distortion_sampling = distortion_sampling
         self.num_frames = num_frames
@@ -102,24 +104,37 @@ class NerfDataset(Dataset):
             ], dtype=torch.float32) / 5.0
             
         frames_pil = self._load_frames_pil(folder_path)
+       
+        # ==========================================
+        # 1. 提取 Informative Patches (一帧多裁)
+        # ==========================================
+        all_patches_pil = []
+        for img in frames_pil:
+            # 经过方差筛选后，每帧返回 num_patches 个高质量图块
+            patches = self.patch_transform(img) if self.patch_transform else [img]
+            all_patches_pil.extend(patches)
+            
+        # ==========================================
+        # 2. Main Branch
+        # ==========================================
+        t_imgs = [self.tensor_transform(p) for p in all_patches_pil]
+        content_input = torch.stack(t_imgs) # 形状自动变为 [T * num_patches, C, H, W]
         
-        # Main Branch
-        t_imgs = [self.basic_transform(img) for img in frames_pil]
-        content_input = torch.stack(t_imgs)
-        
-        # [调用修正后的失真输入生成]
         if self.distortion_sampling:
             distortion_input = self._get_distortion_input(content_input)
         else:
             distortion_input = content_input.clone()
             
-        # SSL Branch
+        # ==========================================
+        # 3. SSL Branch
+        # ==========================================
         content_input_aug = torch.tensor(0.0) 
         distortion_input_aug = torch.tensor(0.0)
         
         if self.ssl_transform is not None:
-            frames_aug_pil = self.ssl_transform(frames_pil)
-            t_imgs_aug = [self.basic_transform(img) for img in frames_aug_pil]
+            # [关键修复]: 将切好的小图块送去做 SSL 增强，保证对比损失的“内容绝对一致”
+            patches_aug_pil = self.ssl_transform(all_patches_pil)
+            t_imgs_aug = [self.tensor_transform(p) for p in patches_aug_pil]
             content_input_aug = torch.stack(t_imgs_aug)
             
             if self.distortion_sampling:
@@ -128,6 +143,33 @@ class NerfDataset(Dataset):
                 distortion_input_aug = content_input_aug.clone()
                 
         return content_input, distortion_input, score_tensor, sub_scores_tensor, key, content_input_aug, distortion_input_aug
+
+    
+        # # Main Branch
+        # t_imgs = [self.basic_transform(img) for img in frames_pil]
+        # content_input = torch.stack(t_imgs)
+        
+        # # [调用修正后的失真输入生成]
+        # if self.distortion_sampling:
+        #     distortion_input = self._get_distortion_input(content_input)
+        # else:
+        #     distortion_input = content_input.clone()
+            
+        # # SSL Branch
+        # content_input_aug = torch.tensor(0.0) 
+        # distortion_input_aug = torch.tensor(0.0)
+        
+        # if self.ssl_transform is not None:
+        #     frames_aug_pil = self.ssl_transform(frames_pil)
+        #     t_imgs_aug = [self.basic_transform(img) for img in frames_aug_pil]
+        #     content_input_aug = torch.stack(t_imgs_aug)
+            
+        #     if self.distortion_sampling:
+        #         distortion_input_aug = self._get_distortion_input(content_input_aug)
+        #     else:
+        #         distortion_input_aug = content_input_aug.clone()
+                
+        # return content_input, distortion_input, score_tensor, sub_scores_tensor, key, content_input_aug, distortion_input_aug
 
     def __len__(self):
         return len(self.valid_samples)
